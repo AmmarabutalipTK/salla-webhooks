@@ -2,7 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { prisma } from "../prisma.js";
 
 const addressRoutes: FastifyPluginAsync = async (app) => {
-  // Get all addresses for a customer
+  // Get addresses
   app.get("/:phone", async (request) => {
     const { phone } = request.params as { phone: string };
 
@@ -16,25 +16,16 @@ const addressRoutes: FastifyPluginAsync = async (app) => {
     return customer?.addresses ?? [];
   });
 
-  // Create address
+  // Add address
   app.post("/:phone", async (request) => {
     const { phone } = request.params as { phone: string };
 
-    const body = request.body as {
-      name: string;
-      city?: string;
-      district?: string;
-      street?: string;
-      latitude?: number;
-      longitude?: number;
-    };
+    const body = request.body as any;
 
     const customer = await prisma.customer.upsert({
       where: { phone },
       update: {},
-      create: {
-        phone,
-      },
+      create: { phone },
     });
 
     return prisma.address.create({
@@ -46,54 +37,20 @@ const addressRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Update address
-  app.put("/:id", async (request, reply) => {
+  app.put("/:id", async (request) => {
     const { id } = request.params as { id: string };
-
-    const body = request.body as {
-      name?: string;
-      city?: string;
-      district?: string;
-      street?: string;
-      latitude?: number;
-      longitude?: number;
-      isDefault?: boolean;
-    };
-
-    const address = await prisma.address.findUnique({
-      where: {
-        id: Number(id),
-      },
-    });
-
-    if (!address) {
-      return reply.code(404).send({
-        message: "Address not found",
-      });
-    }
 
     return prisma.address.update({
       where: {
         id: Number(id),
       },
-      data: body,
+      data: request.body as any,
     });
   });
 
   // Delete address
-  app.delete("/:id", async (request, reply) => {
+  app.delete("/:id", async (request) => {
     const { id } = request.params as { id: string };
-
-    const address = await prisma.address.findUnique({
-      where: {
-        id: Number(id),
-      },
-    });
-
-    if (!address) {
-      return reply.code(404).send({
-        message: "Address not found",
-      });
-    }
 
     await prisma.address.delete({
       where: {
