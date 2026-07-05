@@ -13,7 +13,7 @@ const addressRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
-return [...(customer?.addresses?.slice(-3) ?? []), "اضافه عنوان"];
+return [...(customer?.addresses?.slice(-3) ?? []), {name:"اضافة عنوان جديد",}];
   });
 
   // Add address
