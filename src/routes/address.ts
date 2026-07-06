@@ -34,7 +34,7 @@ app.get("/id/:id", async (request, reply) => {
       },
     });
 
-return [...(customer?.addresses?.slice(-3) ?? []), {name:"اضافة عنوان جديد",}];
+return [...(customer?.addresses?.slice(-3) ?? []), {name:"اضافة عنوان جديد",id:-1}];
   });
 
   // Add address
