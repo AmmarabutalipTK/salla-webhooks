@@ -2,6 +2,27 @@ import { FastifyPluginAsync } from "fastify";
 import { prisma } from "../prisma.js";
 
 const addressRoutes: FastifyPluginAsync = async (app) => {
+
+    // Get address by id
+app.get("/id/:id", async (request, reply) => {
+  const { id } = request.params as { id: string };
+
+  const address = await prisma.address.findUnique({
+    where: {
+      id: Number(id),
+    },
+  });
+
+  if (!address) {
+    return reply.code(404).send({
+      success: false,
+      message: "Address not found",
+    });
+  }
+
+  return address;
+});
+
   // Get addresses
   app.get("/:phone", async (request) => {
     const { phone } = request.params as { phone: string };

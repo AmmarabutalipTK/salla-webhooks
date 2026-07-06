@@ -20,6 +20,7 @@ model Address {
   id         Int      @id @default(autoincrement())
 
   customerId Int
+   courierId  Int?
   customer   Customer @relation(fields: [customerId], references: [id])
 
   name       String
