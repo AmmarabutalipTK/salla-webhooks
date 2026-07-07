@@ -21,6 +21,7 @@ model Address {
 
   customerId Int
    courierId  Int?
+   cityId  Int?
   customer   Customer @relation(fields: [customerId], references: [id])
 
   name       String
