@@ -1,7 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
 
-type CartItem = {
-  product_retailer_id: string | number;
+type SallaProduct = {
+  identifier_type: "id";
+  identifier: string | number;
   quantity: string | number;
 };
 
@@ -12,7 +13,10 @@ type CreateSallaOrderBody = {
   courier_id: number | string;
   ship_to: unknown;
   payment: unknown;
-  cart?: unknown;
+
+  // Engati may send this as an array or JSON string
+  products: SallaProduct[] | string;
+
   coupon_code?: string | null;
 };
 
@@ -42,7 +46,7 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         }
 
         // -----------------------------------------
-        // Request body
+        // Body
         // -----------------------------------------
 
         const {
@@ -52,124 +56,83 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           courier_id,
           ship_to,
           payment,
-          cart,
+          products,
           coupon_code,
         } = req.body;
 
         // -----------------------------------------
-        // Parse cart from Engati
+        // Parse products
         // -----------------------------------------
 
-        const parseCart = (value: unknown): CartItem[] | null => {
-          // Already an array
-          if (Array.isArray(value)) {
-            return value as CartItem[];
+        let parsedProducts: SallaProduct[];
+
+        if (Array.isArray(products)) {
+          parsedProducts = products;
+        } else if (typeof products === "string") {
+          try {
+            parsedProducts = JSON.parse(products);
+          } catch {
+            return res.status(400).send({
+              success: false,
+              message: "products contains invalid JSON",
+            });
           }
-
-          // Nothing received
-          if (value === null || value === undefined) {
-            return null;
-          }
-
-          // JSON string
-          if (typeof value === "string") {
-            const trimmed = value.trim();
-
-            if (!trimmed) {
-              return null;
-            }
-
-            try {
-              const parsed = JSON.parse(trimmed);
-
-              return parseCart(parsed);
-            } catch {
-              return null;
-            }
-          }
-
-          // Object
-          if (typeof value === "object") {
-            const obj = value as Record<string, unknown>;
-
-            // { cart: [...] }
-            if (obj.cart !== undefined) {
-              return parseCart(obj.cart);
-            }
-
-            // { data: [...] }
-            if (obj.data !== undefined) {
-              return parseCart(obj.data);
-            }
-
-            // { Response: { data: [...] } }
-            if (obj.Response !== undefined) {
-              return parseCart(obj.Response);
-            }
-
-            // { products: [...] }
-            if (obj.products !== undefined) {
-              return parseCart(obj.products);
-            }
-          }
-
-          return null;
-        };
-
-        const parsedCart = parseCart(cart);
-
-        // -----------------------------------------
-        // Validate cart
-        // -----------------------------------------
-
-        if (!parsedCart) {
-          console.error(
-            "Unable to parse cart:",
-            JSON.stringify(cart, null, 2)
-          );
-
+        } else {
           return res.status(400).send({
             success: false,
-            message: "Unable to parse cart",
-          });
-        }
-
-        if (parsedCart.length === 0) {
-          return res.status(400).send({
-            success: false,
-            message: "cart cannot be empty",
+            message: "products must be an array or JSON string",
           });
         }
 
         // -----------------------------------------
-        // Convert cart → Salla products
+        // Validate
         // -----------------------------------------
 
-        const products = parsedCart.map((item, index) => {
-          const identifier = Number(item.product_retailer_id);
-          const quantity = Number(item.quantity);
+        if (!Array.isArray(parsedProducts)) {
+          return res.status(400).send({
+            success: false,
+            message: "products must contain an array",
+          });
+        }
 
-          if (!Number.isFinite(identifier)) {
-            throw new Error(
-              `Invalid product_retailer_id at cart index ${index}`
-            );
-          }
-
-          if (!Number.isFinite(quantity) || quantity <= 0) {
-            throw new Error(
-              `Invalid quantity at cart index ${index}`
-            );
-          }
-
-          return {
-            identifier_type: "id",
-            identifier,
-            quantity,
-          };
-        });
+        if (parsedProducts.length === 0) {
+          return res.status(400).send({
+            success: false,
+            message: "products cannot be empty",
+          });
+        }
 
         // -----------------------------------------
-        // Build Salla order
+        // Normalize products
+        // -----------------------------------------
+
+        const normalizedProducts = parsedProducts.map(
+          (item, index) => {
+            const identifier = Number(item.identifier);
+            const quantity = Number(item.quantity);
+
+            if (!Number.isFinite(identifier)) {
+              throw new Error(
+                `Invalid identifier at products index ${index}`
+              );
+            }
+
+            if (!Number.isFinite(quantity) || quantity <= 0) {
+              throw new Error(
+                `Invalid quantity at products index ${index}`
+              );
+            }
+
+            return {
+              identifier_type: "id",
+              identifier,
+              quantity,
+            };
+          }
+        );
+
+        // -----------------------------------------
+        // Build Salla payload
         // -----------------------------------------
 
         const orderPayload: Record<string, unknown> = {
@@ -179,7 +142,7 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           courier_id: Number(courier_id),
           ship_to,
           payment,
-          products,
+          products: normalizedProducts,
         };
 
         // -----------------------------------------
@@ -194,14 +157,12 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         }
 
         // -----------------------------------------
-        // Log
+        // Log final payload
         // -----------------------------------------
 
         console.log("========================================");
         console.log("SALLA ORDER PAYLOAD");
-        console.log(
-          JSON.stringify(orderPayload, null, 2)
-        );
+        console.log(JSON.stringify(orderPayload, null, 2));
         console.log("========================================");
 
         // -----------------------------------------
@@ -222,7 +183,7 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         );
 
         // -----------------------------------------
-        // Read Salla response
+        // Salla response
         // -----------------------------------------
 
         const responseText = await response.text();
@@ -245,14 +206,9 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         );
         console.log("========================================");
 
-        return res
-          .status(response.status)
-          .send(data);
+        return res.status(response.status).send(data);
       } catch (error) {
-        console.error(
-          "Create Salla order error:",
-          error
-        );
+        console.error("Create Salla order error:", error);
 
         return res.status(500).send({
           success: false,
