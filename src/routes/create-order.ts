@@ -12,7 +12,7 @@ type CreateSallaOrderBody = {
   courier_id: number | string;
   ship_to: unknown;
   payment: unknown;
-  cart: CartItem[];
+  cart: CartItem[] | string;
   coupon_code?: string | null;
 };
 
@@ -57,17 +57,43 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         } = req.body;
 
         // -----------------------------------------
-        // Validate cart
+        // Parse cart
+        // Engati may send commerce.cart as a
+        // JSON string instead of an actual array
         // -----------------------------------------
 
-        if (!Array.isArray(cart)) {
+        let parsedCart: CartItem[];
+
+        if (Array.isArray(cart)) {
+          parsedCart = cart;
+        } else if (typeof cart === "string") {
+          try {
+            parsedCart = JSON.parse(cart);
+          } catch {
+            return res.status(400).send({
+              success: false,
+              message: "cart contains invalid JSON",
+            });
+          }
+        } else {
           return res.status(400).send({
             success: false,
-            message: "cart must be an array",
+            message: "cart must be an array or JSON string",
           });
         }
 
-        if (cart.length === 0) {
+        // -----------------------------------------
+        // Validate parsed cart
+        // -----------------------------------------
+
+        if (!Array.isArray(parsedCart)) {
+          return res.status(400).send({
+            success: false,
+            message: "cart must contain an array",
+          });
+        }
+
+        if (parsedCart.length === 0) {
           return res.status(400).send({
             success: false,
             message: "cart cannot be empty",
@@ -78,7 +104,7 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         // Convert Engati cart → Salla products
         // -----------------------------------------
 
-        const products = cart.map((item, index) => {
+        const products = parsedCart.map((item, index) => {
           const identifier = Number(item.product_retailer_id);
           const quantity = Number(item.quantity);
 
