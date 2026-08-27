@@ -143,18 +143,24 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         };
 
         // =========================================
-        // Add coupon ONLY if not empty
+        // Handle coupon
         // =========================================
 
+        const coupon =
+          typeof coupon_code === "string"
+            ? coupon_code.trim()
+            : "";
+
+        // Do NOT send empty / EMPTY coupon to Salla
         if (
-          typeof coupon_code === "string" &&
-          coupon_code.trim() !== ""
+          coupon !== "" &&
+          coupon.toUpperCase() !== "EMPTY"
         ) {
-          orderPayload.coupon_code = coupon_code.trim();
+          orderPayload.coupon_code = coupon;
         }
 
         // =========================================
-        // Log final Salla payload
+        // Log final payload
         // =========================================
 
         console.log("========================================");
@@ -175,13 +181,11 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           "https://api.salla.dev/admin/v2/orders",
           {
             method: "POST",
-
             headers: {
               Authorization: authorization,
               Accept: "application/json",
               "Content-Type": "application/json",
             },
-
             body: JSON.stringify(orderPayload),
           }
         );
@@ -218,7 +222,7 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         console.log("========================================");
 
         // =========================================
-        // Return Salla response to Engati
+        // Return response to Engati
         // =========================================
 
         return res
