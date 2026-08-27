@@ -21,6 +21,30 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
     "/api/salla/orders",
     async (req, res) => {
       try {
+        // -----------------------------------------
+        // Get Authorization header from Engati
+        // -----------------------------------------
+
+        const authorization = req.headers.authorization;
+
+        if (!authorization) {
+          return res.status(401).send({
+            success: false,
+            message: "Authorization header is required",
+          });
+        }
+
+        if (!authorization.startsWith("Bearer ")) {
+          return res.status(401).send({
+            success: false,
+            message: "Authorization must use Bearer token",
+          });
+        }
+
+        // -----------------------------------------
+        // Request body
+        // -----------------------------------------
+
         const {
           customer,
           receiver,
@@ -32,7 +56,10 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           coupon_code,
         } = req.body;
 
+        // -----------------------------------------
         // Validate cart
+        // -----------------------------------------
+
         if (!Array.isArray(cart)) {
           return res.status(400).send({
             success: false,
@@ -47,7 +74,10 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
+        // -----------------------------------------
         // Convert Engati cart → Salla products
+        // -----------------------------------------
+
         const products = cart.map((item, index) => {
           const identifier = Number(item.product_retailer_id);
           const quantity = Number(item.quantity);
@@ -71,7 +101,10 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           };
         });
 
+        // -----------------------------------------
         // Build Salla order payload
+        // -----------------------------------------
+
         const orderPayload: Record<string, unknown> = {
           customer,
           receiver,
@@ -82,7 +115,10 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           products,
         };
 
-        // Add coupon only when provided
+        // -----------------------------------------
+        // Add coupon if provided
+        // -----------------------------------------
+
         if (
           typeof coupon_code === "string" &&
           coupon_code.trim().length > 0
@@ -90,38 +126,47 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           orderPayload.coupon_code = coupon_code.trim();
         }
 
-        console.log("========================================");
+        // -----------------------------------------
+        // Log order
+        // -----------------------------------------
+
+        console.log(
+          "========================================"
+        );
+
         console.log("Creating Salla order:");
-        console.log(JSON.stringify(orderPayload, null, 2));
-        console.log("========================================");
 
-        // Make sure token exists
-        const sallaToken = process.env.SALLA_TOKEN;
+        console.log(
+          JSON.stringify(orderPayload, null, 2)
+        );
 
-        if (!sallaToken) {
-          console.error("SALLA_TOKEN is not configured");
+        console.log(
+          "========================================"
+        );
 
-          return res.status(500).send({
-            success: false,
-            message: "Salla token is not configured",
-          });
-        }
+        // -----------------------------------------
+        // Send request to Salla
+        // -----------------------------------------
 
-        // Send order to Salla
         const response = await fetch(
           "https://api.salla.dev/admin/v2/orders",
           {
             method: "POST",
+
             headers: {
-              Authorization: `Bearer ${sallaToken}`,
+              Authorization: authorization,
               Accept: "application/json",
               "Content-Type": "application/json",
             },
+
             body: JSON.stringify(orderPayload),
           }
         );
 
-        // Read response safely
+        // -----------------------------------------
+        // Read Salla response
+        // -----------------------------------------
+
         const responseText = await response.text();
 
         let data: unknown;
@@ -132,7 +177,18 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           data = responseText;
         }
 
-        console.log("Salla status:", response.status);
+        // -----------------------------------------
+        // Log Salla response
+        // -----------------------------------------
+
+        console.log(
+          "========================================"
+        );
+
+        console.log(
+          "Salla status:",
+          response.status
+        );
 
         console.log(
           "Salla response:",
@@ -141,7 +197,18 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
             : JSON.stringify(data, null, 2)
         );
 
-        return res.status(response.status).send(data);
+        console.log(
+          "========================================"
+        );
+
+        // -----------------------------------------
+        // Return Salla response to Engati
+        // -----------------------------------------
+
+        return res
+          .status(response.status)
+          .send(data);
+
       } catch (error) {
         console.error(
           "Create Salla order error:",
