@@ -13,10 +13,7 @@ type CreateSallaOrderBody = {
   courier_id: number | string;
   ship_to: unknown;
   payment: unknown;
-
-  // Engati may send this as an array or JSON string
   products: SallaProduct[] | string;
-
   coupon_code?: string | null;
 };
 
@@ -25,9 +22,9 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
     "/api/salla/orders",
     async (req, res) => {
       try {
-        // -----------------------------------------
+        // =========================================
         // Authorization
-        // -----------------------------------------
+        // =========================================
 
         const authorization = req.headers.authorization;
 
@@ -45,9 +42,9 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
-        // -----------------------------------------
-        // Body
-        // -----------------------------------------
+        // =========================================
+        // Request body
+        // =========================================
 
         const {
           customer,
@@ -60,9 +57,9 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           coupon_code,
         } = req.body;
 
-        // -----------------------------------------
+        // =========================================
         // Parse products
-        // -----------------------------------------
+        // =========================================
 
         let parsedProducts: SallaProduct[];
 
@@ -84,9 +81,9 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
-        // -----------------------------------------
-        // Validate
-        // -----------------------------------------
+        // =========================================
+        // Validate products
+        // =========================================
 
         if (!Array.isArray(parsedProducts)) {
           return res.status(400).send({
@@ -102,9 +99,9 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           });
         }
 
-        // -----------------------------------------
+        // =========================================
         // Normalize products
-        // -----------------------------------------
+        // =========================================
 
         const normalizedProducts = parsedProducts.map(
           (item, index) => {
@@ -124,16 +121,16 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
             }
 
             return {
-              identifier_type: "id",
+              identifier_type: "id" as const,
               identifier,
               quantity,
             };
           }
         );
 
-        // -----------------------------------------
-        // Build Salla payload
-        // -----------------------------------------
+        // =========================================
+        // Build Salla order payload
+        // =========================================
 
         const orderPayload: Record<string, unknown> = {
           customer,
@@ -145,46 +142,53 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           products: normalizedProducts,
         };
 
-        // -----------------------------------------
-        // Coupon
-        // -----------------------------------------
+        // =========================================
+        // Add coupon ONLY if not empty
+        // =========================================
 
         if (
           typeof coupon_code === "string" &&
-          coupon_code.trim().length > 0
+          coupon_code.trim() !== ""
         ) {
           orderPayload.coupon_code = coupon_code.trim();
         }
 
-        // -----------------------------------------
-        // Log final payload
-        // -----------------------------------------
+        // =========================================
+        // Log final Salla payload
+        // =========================================
 
         console.log("========================================");
-        console.log("SALLA ORDER PAYLOAD");
-        console.log(JSON.stringify(orderPayload, null, 2));
+        console.log("CREATING SALLA ORDER");
         console.log("========================================");
 
-        // -----------------------------------------
-        // Send to Salla
-        // -----------------------------------------
+        console.log(
+          JSON.stringify(orderPayload, null, 2)
+        );
+
+        console.log("========================================");
+
+        // =========================================
+        // Send request to Salla
+        // =========================================
 
         const response = await fetch(
           "https://api.salla.dev/admin/v2/orders",
           {
             method: "POST",
+
             headers: {
               Authorization: authorization,
               Accept: "application/json",
               "Content-Type": "application/json",
             },
+
             body: JSON.stringify(orderPayload),
           }
         );
 
-        // -----------------------------------------
-        // Salla response
-        // -----------------------------------------
+        // =========================================
+        // Read Salla response
+        // =========================================
 
         const responseText = await response.text();
 
@@ -196,19 +200,39 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
           data = responseText;
         }
 
+        // =========================================
+        // Log Salla response
+        // =========================================
+
         console.log("========================================");
-        console.log("SALLA STATUS:", response.status);
+        console.log("SALLA RESPONSE");
+        console.log("Status:", response.status);
+
         console.log(
-          "SALLA RESPONSE:",
+          "Data:",
           typeof data === "string"
             ? data
             : JSON.stringify(data, null, 2)
         );
+
         console.log("========================================");
 
-        return res.status(response.status).send(data);
+        // =========================================
+        // Return Salla response to Engati
+        // =========================================
+
+        return res
+          .status(response.status)
+          .send(data);
       } catch (error) {
-        console.error("Create Salla order error:", error);
+        // =========================================
+        // Error handling
+        // =========================================
+
+        console.error(
+          "Create Salla order error:",
+          error
+        );
 
         return res.status(500).send({
           success: false,
