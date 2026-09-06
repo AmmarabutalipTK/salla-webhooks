@@ -1,7 +1,9 @@
 import { FastifyPluginAsync } from "fastify";
 
 type SallaProduct = {
-  productId: string | number;
+  productId?: string | number;
+  identifier_type?: "id";
+  identifier?: string | number;
   quantity: string | number;
 };
 
@@ -141,7 +143,18 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
 
         const normalizedProducts = parsedProducts.map(
           (item, index) => {
-            const productId = Number(item.productId);
+            /*
+             * Prefer productId because this is the
+             * variant ID from the cart.
+             *
+             * identifier is kept as fallback so the
+             * endpoint remains compatible with the
+             * previous request structure.
+             */
+            const productId = Number(
+              item.productId ?? item.identifier
+            );
+
             const quantity = Number(item.quantity);
 
             if (!Number.isFinite(productId)) {
@@ -156,11 +169,11 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
               );
             }
 
-            const variant = variants[productId];
+            // =========================================
+            // Check if product is a variant
+            // =========================================
 
-            // =========================================
-            // Variant product
-            // =========================================
+            const variant = variants[productId];
 
             if (variant) {
               return {
@@ -216,7 +229,6 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
             ? coupon_code.trim()
             : "";
 
-        // Do NOT send empty / EMPTY coupon to Salla
         if (
           coupon !== "" &&
           coupon.toUpperCase() !== "EMPTY"
