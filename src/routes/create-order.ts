@@ -135,7 +135,7 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
 };
 
 const normalizedProducts = parsedProducts.map((item, index) => {
-  const productId = Number(item.productId);
+const productId = Number(item.identifier);
   const quantity = Number(item.quantity);
 
   if (!Number.isFinite(productId)) {
