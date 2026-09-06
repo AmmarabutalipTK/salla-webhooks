@@ -1,6 +1,7 @@
 import { FastifyPluginAsync } from "fastify";
 
 type SallaProduct = {
+productId:string|number
   identifier_type: "id";
   identifier: string | number;
   quantity: string | number;
@@ -103,30 +104,70 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         // Normalize products
         // =========================================
 
-        const normalizedProducts = parsedProducts.map(
-          (item, index) => {
-            const identifier = Number(item.identifier);
-            const quantity = Number(item.quantity);
+        const variants: Record<
+  number,
+  {
+    parentId: number;
+    optionId: number;
+    optionValueId: number;
+  }
+> = {
+  259362436: {
+    parentId: 288835721,
+    optionId: 256735972,
+    optionValueId: 183982973,
+  },
+  1498590597: {
+    parentId: 288835721,
+    optionId: 256735972,
+    optionValueId: 1692170878,
+  },
+  923369965: {
+    parentId: 122269710,
+    optionId: 691503395,
+    optionValueId: 1655204330,
+  },
+  14065902: {
+    parentId: 122269710,
+    optionId: 691503395,
+    optionValueId: 1014401259,
+  },
+};
 
-            if (!Number.isFinite(identifier)) {
-              throw new Error(
-                `Invalid identifier at products index ${index}`
-              );
-            }
+const normalizedProducts = parsedProducts.map((item, index) => {
+  const productId = Number(item.productId);
+  const quantity = Number(item.quantity);
 
-            if (!Number.isFinite(quantity) || quantity <= 0) {
-              throw new Error(
-                `Invalid quantity at products index ${index}`
-              );
-            }
+  if (!Number.isFinite(productId)) {
+    throw new Error(`Invalid productId at products index ${index}`);
+  }
 
-            return {
-              identifier_type: "id" as const,
-              identifier,
-              quantity,
-            };
-          }
-        );
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error(`Invalid quantity at products index ${index}`);
+  }
+
+  const variant = variants[productId];
+
+  if (variant) {
+    return {
+      identifier_type: "id" as const,
+      identifier: Number(variant.parentId),
+      quantity,
+      options: [
+        {
+          id: Number(variant.optionId),
+          value: [String(variant.optionValueId)],
+        },
+      ],
+    };
+  }
+
+  return {
+    identifier_type: "id" as const,
+    identifier: Number(productId),
+    quantity,
+  };
+});
 
         // =========================================
         // Build Salla order payload
