@@ -1,10 +1,13 @@
 import { FastifyPluginAsync } from "fastify";
 
 type SallaProduct = {
-  productId?: string | number;
-  identifier_type?: "id";
-  identifier?: string | number;
+  identifier_type: "id";
+  identifier: string | number;
   quantity: string | number;
+  options?: {
+    id: string | number;
+    value: string[];
+  }[];
 };
 
 type CreateSallaOrderBody = {
@@ -101,109 +104,66 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         }
 
         // =========================================
-        // Variant mapping
-        // =========================================
-
-        const variants: Record<
-          number,
-          {
-            parentId: number;
-            optionId: number;
-            optionValueId: number;
-          }
-        > = {
-          259362436: {
-            parentId: 288835721,
-            optionId: 256735972,
-            optionValueId: 183982973,
-          },
-
-          1498590597: {
-            parentId: 288835721,
-            optionId: 256735972,
-            optionValueId: 1692170878,
-          },
-
-          923369965: {
-            parentId: 122269710,
-            optionId: 691503395,
-            optionValueId: 1655204330,
-          },
-
-          14065902: {
-            parentId: 122269710,
-            optionId: 691503395,
-            optionValueId: 1014401259,
-          },
-        };
-
-        // =========================================
         // Normalize products
         // =========================================
+        //
+        // Products are already transformed by Engati.
+        // Keep options exactly as received.
+        //
 
         const normalizedProducts = parsedProducts.map(
           (item, index) => {
-            /*
-             * Prefer productId because this is the
-             * variant ID from the cart.
-             *
-             * identifier is kept as fallback so the
-             * endpoint remains compatible with the
-             * previous request structure.
-             */
-            const productId = Number(
-              item.productId ?? item.identifier
-            );
-
+            const identifier = Number(item.identifier);
             const quantity = Number(item.quantity);
 
-            if (!Number.isFinite(productId)) {
+            if (!Number.isFinite(identifier)) {
               throw new Error(
-                `Invalid productId at products index ${index}`
+                `Invalid identifier at products index ${index}`
               );
             }
 
-            if (!Number.isFinite(quantity) || quantity <= 0) {
+            if (
+              !Number.isFinite(quantity) ||
+              quantity <= 0
+            ) {
               throw new Error(
                 `Invalid quantity at products index ${index}`
               );
             }
 
-            // =========================================
-            // Check if product is a variant
-            // =========================================
-
-            const variant = variants[productId];
-
-            if (variant) {
-              return {
-                identifier_type: "id" as const,
-                identifier: variant.parentId,
-                quantity,
-                options: [
-                  {
-                    id: variant.optionId,
-                    value: [String(variant.optionValueId)],
-                  },
-                ],
-              };
-            }
-
-            // =========================================
-            // Normal product
-            // =========================================
-
             return {
               identifier_type: "id" as const,
-              identifier: productId,
+              identifier,
               quantity,
+
+              ...(item.options &&
+              item.options.length > 0
+                ? {
+                    options: item.options.map(
+                      (option) => ({
+                        id: Number(option.id),
+                        value: option.value.map(
+                          String
+                        ),
+                      })
+                    ),
+                  }
+                : {}),
             };
           }
         );
 
+        // =========================================
+        // Log normalized products
+        // =========================================
+
         console.log(
           "NORMALIZED PRODUCTS:",
-          JSON.stringify(normalizedProducts, null, 2)
+          JSON.stringify(
+            normalizedProducts,
+            null,
+            2
+          )
         );
 
         // =========================================
@@ -245,7 +205,11 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         console.log("========================================");
 
         console.log(
-          JSON.stringify(orderPayload, null, 2)
+          JSON.stringify(
+            orderPayload,
+            null,
+            2
+          )
         );
 
         console.log("========================================");
@@ -271,7 +235,8 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
         // Read Salla response
         // =========================================
 
-        const responseText = await response.text();
+        const responseText =
+          await response.text();
 
         let data: unknown;
 
@@ -287,13 +252,20 @@ const orderRoutes: FastifyPluginAsync = async (app) => {
 
         console.log("========================================");
         console.log("SALLA RESPONSE");
-        console.log("Status:", response.status);
+        console.log(
+          "Status:",
+          response.status
+        );
 
         console.log(
           "Data:",
           typeof data === "string"
             ? data
-            : JSON.stringify(data, null, 2)
+            : JSON.stringify(
+                data,
+                null,
+                2
+              )
         );
 
         console.log("========================================");
