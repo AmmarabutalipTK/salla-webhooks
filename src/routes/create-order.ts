@@ -168,7 +168,7 @@ const productId = Number(item.identifier);
     quantity,
   };
 });
-
+console.log("NORMALIZED PRODUCTS:", JSON.stringify(normalizedProducts, null, 2));
         // =========================================
         // Build Salla order payload
         // =========================================
